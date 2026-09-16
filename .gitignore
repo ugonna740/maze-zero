@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+unity-web-build.log
+*.log
+staging/
+cartoon_ui_pack_extracted/
+Fredoka.ttf
+Fredoka-OFL.txt
+unity-source/Library/
+unity-source/Temp/
+unity-source/Logs/
+unity-source/UserSettings/
+unity-source/Build/
