@@ -1,0 +1,11 @@
+/unity/Build/unity.data.gz
+  Cache-Control: no-transform
+  Content-Type: application/octet-stream
+
+/unity/Build/unity.framework.js.gz
+  Cache-Control: no-transform
+  Content-Type: application/octet-stream
+
+/unity/Build/unity.wasm.gz
+  Cache-Control: no-transform
+  Content-Type: application/octet-stream

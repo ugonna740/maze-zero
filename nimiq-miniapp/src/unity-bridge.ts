@@ -37,19 +37,49 @@ export async function mountUnity(canvas: HTMLCanvasElement, onProgress: (value: 
   const loaderUrl = import.meta.env.VITE_UNITY_LOADER_URL || '/unity/Build/unity.loader.js';
   const buildUrl = import.meta.env.VITE_UNITY_BUILD_URL || '/unity/Build';
   const buildName = import.meta.env.VITE_UNITY_BUILD_NAME || 'unity';
-  const suffix = import.meta.env.VITE_UNITY_COMPRESSION_SUFFIX ?? '.unityweb';
+  const suffix = import.meta.env.VITE_UNITY_COMPRESSION_SUFFIX ?? '.gz';
   await injectScript(loaderUrl);
   if (!window.createUnityInstance) throw new Error('Unity loader did not expose createUnityInstance.');
-  unity = await window.createUnityInstance(canvas, {
-    dataUrl: `${buildUrl}/${buildName}.data${suffix}`,
-    frameworkUrl: `${buildUrl}/${buildName}.framework.js${suffix}`,
-    codeUrl: `${buildUrl}/${buildName}.wasm${suffix}`,
-    streamingAssetsUrl: '/unity/StreamingAssets',
-    companyName: 'Maze Zero',
-    productName: 'Maze Zero',
-    productVersion: '0.1.0',
-  }, onProgress);
+  const assetUrls: string[] = [];
+  try {
+    const dataUrl = await unpackBuildFile(`${buildUrl}/${buildName}.data${suffix}`, 'application/octet-stream');
+    assetUrls.push(dataUrl);
+    onProgress(0.25);
+    const frameworkUrl = await unpackBuildFile(`${buildUrl}/${buildName}.framework.js${suffix}`, 'application/javascript');
+    assetUrls.push(frameworkUrl);
+    onProgress(0.35);
+    const codeUrl = await unpackBuildFile(`${buildUrl}/${buildName}.wasm${suffix}`, 'application/wasm');
+    assetUrls.push(codeUrl);
+    onProgress(0.5);
+    unity = await window.createUnityInstance(canvas, {
+      dataUrl,
+      frameworkUrl,
+      codeUrl,
+      streamingAssetsUrl: '/unity/StreamingAssets',
+      companyName: 'Maze Zero',
+      productName: 'Maze Zero',
+      productVersion: '0.1.0',
+    }, value => onProgress(0.5 + value * 0.5));
+  } finally {
+    assetUrls.forEach(url => URL.revokeObjectURL(url));
+  }
   if (pending) unity.SendMessage('Lobby UI', 'OnNimiqModeAuthorized', JSON.stringify(pending));
+}
+
+async function unpackBuildFile(url: string, contentType: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Unity asset unavailable: ${url} (${response.status})`);
+  const downloaded = await response.blob();
+  const magic = new Uint8Array(await downloaded.slice(0, 2).arrayBuffer());
+  let data = downloaded;
+  // Pages can serve a pre-gzipped file as binary. Decode it before handing
+  // the asset to Unity; a Blob URL then has the exact content type it expects.
+  if (magic[0] === 0x1f && magic[1] === 0x8b) {
+    if (typeof DecompressionStream === 'undefined')
+      throw new Error('This phone needs iOS 16.4 or later to open the game.');
+    data = await new Response(downloaded.stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+  }
+  return URL.createObjectURL(new Blob([data], { type: contentType }));
 }
 
 function injectScript(src: string): Promise<void> {
